@@ -1,92 +1,69 @@
 # BCH Stealth Protocol
 
-**Stealth + Fusion + Onion — one pipeline, one button, maximum privacy.**
+**Stealth + Fusion + Onion — one pipeline, maximum privacy for Bitcoin Cash.**
 
-> *No other BCH wallet offers this. This is the moat.*
+No other BCH wallet offers this. One button. All three, always.
 
 ---
 
 ## What Is It?
 
-The BCH Stealth Protocol is a composable privacy pipeline for Bitcoin Cash that
-unifies three independent privacy primitives into a single, automatic flow:
+The BCH Stealth Protocol is a unified privacy pipeline that chains three cryptographic primitives into a single automatic flow triggered on every receive:
 
 ```
  Receive BCH
       │
       ▼
  ┌─────────────────────────────────┐
- │  1. ONION (00 Onion)            │  Route funds through multi-hop HTLC relay
- │     Multi-hop, Nostr-coordinated│  Hides sender IP, breaks network-level analysis
+ │  1. ONION (00 Onion)            │  Multi-hop HTLC routing over BCH
+ │     Nostr-coordinated relays    │  Hides sender origin, breaks IP analysis
  └──────────────┬──────────────────┘
                 │
                 ▼
  ┌─────────────────────────────────┐
  │  2. FUSION (00 Joiner)          │  CashFusion-style CoinJoin mixing
- │     CoinJoin, Nostr-coordinated │  Breaks on-chain input/output linkage
+ │     6-phase, Nostr-coordinated  │  Breaks on-chain input/output linkage
  └──────────────┬──────────────────┘
                 │
                 ▼
  ┌─────────────────────────────────┐
- │  3. STEALTH (00 Protocol)       │  Output to beaconless ECDH stealth address
- │     ECDH, no OP_RETURN         │  Receiver address is unlinkable, unannounced
+ │  3. STEALTH (00 Protocol)       │  Beaconless ECDH one-time address
+ │     No OP_RETURN, no beacon     │  Receiver unlinkable, unannounced
  └──────────────┬──────────────────┘
                 │
                 ▼
       Funds arrive at stealth address
       Receiver scans via Pubkey Indexer
-      No link to sender, mixer, or receiver
 ```
 
-**One button. No manual steps. All three, always.**
+Each component closes a different privacy leak:
 
----
-
-## Why Three? Why Together?
-
-Each component attacks a different privacy leak:
-
-| Component | What It Breaks |
+| Component | What it closes |
 |-----------|----------------|
-| **Onion** | Network-level analysis (who sent to whom, IP linkage) |
-| **Fusion** | On-chain input/output graph (which inputs funded which outputs) |
-| **Stealth** | Address reuse, receiver identification, payment graph |
+| **Onion** | Network-level: who sent, IP, timing |
+| **Fusion** | On-chain: input/output graph linkage |
+| **Stealth** | Address graph: receiver identity, payment tracing |
 
-Separating them creates **metadata leaks**:
-- Onion without Stealth: the final output address reveals the receiver
-- Fusion without Stealth: change outputs can re-link identities
-- Stealth without Fusion: the sender's inputs are still linkable to the payment
-
-Together they form a complete privacy envelope. **Separating them is a bug.**
+Separating them leaks metadata. Together they form a complete privacy envelope.
 
 ---
 
 ## Auto Stealth Mode
 
-The user-facing feature is called **Auto Stealth Mode**:
-
-- A single toggle in wallet settings (default: ON)
-- When ON: every incoming payment automatically triggers Onion → Fusion → Stealth
-- When OFF: funds arrive normally (useful when no relay is available)
-- Rounds selector: choose 1, 2, 3, or 4 Fusion rounds (more rounds = more privacy)
+Single toggle in wallet settings (default ON):
 
 ```
 Settings
   ┌──────────────────────────────────────┐
-  │  ✅ Auto Stealth Mode  [ON]          │
+  │  ✅ Auto Stealth Mode                │
   │                                      │
-  │  Fusion Rounds:  [ 1 ] [●2] [ 3 ] [ 4] │
+  │  Fusion Rounds:  ○1  ●2  ○3  ○4     │
   │                                      │
-  │  Pipeline: Onion + Fusion + Stealth  │
-  │  Status: Ready                       │
+  │  Pipeline: Onion → Fusion → Stealth  │
   └──────────────────────────────────────┘
 ```
 
-**Implementation in wallet.html:**
-- On UTXO receive event: auto-trigger `startStealthPipeline(utxo)`
-- `startStealthPipeline` = `routeOnion()` → `joinFusion()` → `sendStealth()`
-- Each step's completion triggers the next automatically
-- User sees a single status: "Stealth Pipeline Running…" / "Complete"
+When ON, every incoming UTXO automatically routes through all three stages. No manual steps. Configurable Fusion rounds (1–4): more rounds = more privacy.
 
 ---
 
@@ -94,351 +71,362 @@ Settings
 
 ### 1. Stealth Addresses (00 Protocol)
 
-**Specification**: `stealth.html` / `wallet.html:4139-4515`
+Beaconless ECDH stealth addresses on BCH. No OP_RETURN. No on-chain announcement. Sender derives a unique one-time address per payment; receiver scans the blockchain to find payments.
 
-The receiver publishes a **stealth paycode**:
+**Receiver publishes a paycode:**
 ```
 stealth:<scan_pubkey_66hex><spend_pubkey_66hex>
 ```
 
-**Sender flow** (no OP_RETURN, beaconless):
+**Sender flow:**
 ```
-1. Pick first input's private key → derive its pubkey P_sender
-2. Compute shared secret: S = ECDH(scan_pub_receiver, P_sender)
-3. Derive one-time address: addr = Hash(S) · G + spend_pub_receiver
-4. Send to addr
-5. Notify receiver via Nostr DM (encrypted with scan_pub): { txid }
-```
-
-**Receiver scanning flow**:
-```
-1. Download all P2PKH input pubkeys for block range from Pubkey Indexer
-2. For each pubkey P: compute S = ECDH(scan_priv, P)
-3. Derive: addr_candidate = Hash(S) · G + spend_pub
-4. Check if addr_candidate has UTXOs → match = payment received
-5. Spend: derive spend_key = spend_priv + Hash(S)
+1. Take first input private key  →  derive pubkey P_sender
+2. Compute shared secret:  S = ECDH(scan_pub_receiver, p_sender_priv)
+3. Derive one-time address:  addr = Hash(S)·G + spend_pub_receiver
+4. Send BCH to addr
+5. Notify receiver via encrypted Nostr DM: { txid }
 ```
 
-**Key derivation paths:**
+**Receiver scanning flow:**
 ```
-BIP39 seed path:  m/352'/145'/0'/0/i  (scan)
-                  m/352'/145'/0'/1/i  (spend)
-Raw hex keys:     scan_key  = SHA256("bch-stealth-scan:"  || raw_key)
-                  spend_key = SHA256("bch-stealth-spend:" || raw_key)
+1. Download all P2PKH input pubkeys for block range  ←  Pubkey Indexer
+2. For each pubkey P:  S = ECDH(scan_priv, P)
+3. Derive:  addr_candidate = Hash(S)·G + spend_pub
+4. Check UTXO set  →  match = payment received
+5. Spend key:  k = spend_priv + Hash(S)
+```
+
+**Key derivation:**
+```
+BIP39 seed:   m/352'/145'/0'/0/i  (scan key)
+              m/352'/145'/0'/1/i  (spend key)
+
+Raw hex key:  scan_key  = SHA256("bch-stealth-scan:"  || raw_key)
+              spend_key = SHA256("bch-stealth-spend:" || raw_key)
 ```
 
 ---
 
 ### 2. P2PKH Pubkey Indexer
 
-**The scanning backbone.** Without this, receivers must download full blocks.
+The scanning backbone for stealth address detection. Serves all compressed pubkeys from P2PKH transaction inputs for any BCH block range. The server never sees your scan key — it returns all pubkeys, and wallets filter locally.
+
+**Source code:** [`indexer/pubkey-indexer.js`](indexer/pubkey-indexer.js)
 
 **Architecture:**
 
 ```
-                     ┌─────────────────────────────────┐
-                     │         Source Layer             │
-                     │                                  │
-                     │  Mode A: Fulcrum (WSS)           │
-                     │  - Public servers, no node       │
-                     │  - blockchain.transaction.get()  │
-                     │  - Default for quick setup       │
-                     │                                  │
-                     │  Mode B: Local Node (BCHN RPC)   │
-                     │  - Local BCHN, full sovereignty  │
-                     │  - getblock(hash, 2)             │
-                     │  - For self-hosters (Start9)     │
-                     └──────────────┬──────────────────┘
-                                    │
-                                    │ raw tx hex
-                                    ▼
-                     ┌─────────────────────────────────┐
-                     │        Extract Layer             │
-                     │                                  │
-                     │  Parse P2PKH scriptSig inputs    │
-                     │  Extract per input:              │
-                     │   - compressed pubkey (33 bytes) │
-                     │   - prevTxid (32 bytes)          │
-                     │   - prevVout (4 bytes)           │
-                     │   - vin index                    │
-                     └──────────────┬──────────────────┘
-                                    │
-                          ┌─────────┴──────────┐
-                          │                    │
-                    ┌─────▼──────┐      ┌──────▼─────┐
-                    │ JSON Cache │      │ Binary Cache│
-                    │ per block  │      │ per block   │
-                    │ (readable) │      │ (73 bytes/  │
-                    │            │      │  entry)     │
-                    └─────┬──────┘      └──────┬──────┘
-                          │                    │
-           ┌──────────────┼────────────────────┼──────────────┐
-           │              │                    │              │
-    ┌──────▼─────┐ ┌──────▼────┐       ┌──────▼─────┐ ┌─────▼──────┐
-    │ HTTP/JSON  │ │    Tor    │       │   Binary   │ │  Library  │
-    │ API        │ │  .onion   │       │   stdout   │ │  import   │
-    │ port 3847  │ │  service  │       │  (pipe)    │ │  (JS/TS)  │
-    └──────┬─────┘ └────┬──────┘       └──────┬─────┘ └─────┬──────┘
-           │             │                    │              │
-           ▼             ▼                    ▼              ▼
-      Browser        Remote             CLI tools /      EC plugin /
-      wallets        wallets            desktop app      any wallet
-      (00-Wallet)    over Tor                            direct call
-```
-
-**Indexer API:**
-```
-GET /api/pubkeys?from={height}&to={height}
-GET /api/health
-GET /api/stats
+         ┌──────────────────────────────────────┐
+         │            Source Layer               │
+         │                                       │
+         │  Mode A: Fulcrum (WSS)                │
+         │  - Public Fulcrum electrum servers    │
+         │  - blockchain.block.get(height)       │
+         │  - No node required, default mode     │
+         │                                       │
+         │  Mode B: Local Node (BCHN JSON-RPC)   │
+         │  - getblock(hash, 2) or raw parse     │
+         │  - Full data sovereignty              │
+         │  - For Start9 / self-hosters          │
+         └───────────────┬──────────────────────┘
+                         │ raw tx bytes
+                         ▼
+         ┌──────────────────────────────────────┐
+         │            Extract Layer              │
+         │                                       │
+         │  Parse P2PKH scriptSig per input:     │
+         │    [sig_push 0x47-0x49][sig][0x21]   │
+         │    [33-byte compressed pubkey]        │
+         │    validate: prefix 0x02 or 0x03     │
+         │                                       │
+         │  Output per entry:                    │
+         │    txid (current tx, 32 bytes)        │
+         │    vin index (1 byte)                 │
+         │    pubkey (33 bytes)                  │
+         │    outpoint txid (32 bytes)           │
+         │    outpoint vout (4 bytes)            │
+         └───────────────┬──────────────────────┘
+                         │
+               ┌─────────┴─────────┐
+               │                   │
+         ┌─────▼──────┐     ┌──────▼──────┐
+         │ JSON cache │     │ Binary cache │
+         │ per block  │     │  per block   │
+         └─────┬──────┘     └──────┬───────┘
+               │                   │
+    ┌──────────┼───────────────────┼──────────┐
+    │          │                   │          │
+ ┌──▼───┐  ┌───▼───┐        ┌─────▼───┐  ┌───▼────┐
+ │ HTTP │  │  Tor  │        │ Binary  │  │Library │
+ │ API  │  │.onion │        │ stdout  │  │import  │
+ │:3847 │  │Start9 │        │ (pipe)  │  │(JS/TS) │
+ └──┬───┘  └───┬───┘        └─────┬───┘  └───┬────┘
+    │           │                 │           │
+    ▼           ▼                 ▼           ▼
+00-Wallet  Remote wallets   CLI/desktop   EC plugin
+browser    over Tor         app           any wallet
 ```
 
 **P2PKH scriptSig parsing:**
 ```
-scriptSig bytes: <sig_push> <sig_71-73> <0x21> <pubkey_33>
-
-sig_push:   0x47–0x49 (71–73 bytes)
-0x21:       push 33 bytes (compressed pubkey prefix)
-pubkey[0]:  0x02 or 0x03 (compressed point on secp256k1)
+Input scriptSig:
+  [push: 0x47–0x49]  →  DER signature (71–73 bytes) + sighash type
+  [0x21]             →  push 33 bytes
+  [pubkey: 33 bytes] →  0x02 or 0x03 prefix = valid compressed point
 ```
 
 **Binary wire format:**
 
-Stream entry (69 bytes, `scan --format binary` stdout):
+Stream entry — `scan --format binary` stdout, **69 bytes**:
 ```
-┌──────────┬─────────────────┬──────────────┐
-│ pubkey   │ outpoint_txid   │ outpoint_vout│
-│ 33 bytes │    32 bytes     │   4 bytes    │
-│ 02/03... │   big-endian    │   LE u32     │
-└──────────┴─────────────────┴──────────────┘
-```
-
-File entry (106 bytes, stored in `.bin` block cache):
-```
-┌──────────┬──────────┬─────┬──────────┬─────────────────┬──────────────┐
-│ height   │  txid    │ vin │  pubkey  │ outpoint_txid   │ outpoint_vout│
-│  4 bytes │ 32 bytes │  1  │ 33 bytes │    32 bytes     │   4 bytes    │
-│  LE u32  │  big-end │ u8  │ 02/03..  │   big-endian    │   LE u32     │
-└──────────┴──────────┴─────┴──────────┴─────────────────┴──────────────┘
- total: 106 bytes/entry
+┌─────────────┬──────────────────┬──────────────┐
+│   pubkey    │  outpoint_txid   │ outpoint_vout│
+│   33 bytes  │    32 bytes      │   4 bytes    │
+│  0x02/0x03  │   big-endian     │   LE uint32  │
+└─────────────┴──────────────────┴──────────────┘
 ```
 
-Block file header (8 bytes, precedes each block's entries):
+File entry — stored in `.bin` block cache, **106 bytes**:
+```
+┌──────────┬──────────┬─────┬─────────────┬──────────────────┬──────────────┐
+│  height  │   txid   │ vin │   pubkey    │  outpoint_txid   │ outpoint_vout│
+│  4 bytes │ 32 bytes │ 1 b │   33 bytes  │    32 bytes      │   4 bytes    │
+│  LE u32  │ big-end  │ u8  │  0x02/0x03  │   big-endian     │   LE u32     │
+└──────────┴──────────┴─────┴─────────────┴──────────────────┴──────────────┘
+```
+
+Block file header — precedes each block's entries, **8 bytes**:
 ```
 ┌──────────┬──────────┐
-│ height   │  count   │
-│  4 bytes │  4 bytes │
+│  height  │  count   │     followed by count × 106-byte entries
+│  4 bytes │  4 bytes │     Seekable: read header → skip count×106 → next block
 │  LE u32  │  LE u32  │
 └──────────┴──────────┘
-followed by count × 106-byte entries
-File is seekable: read header → skip count×106 → next block header
 ```
 
-> Stream drops `height`, `txid`, and `vin` — only the data needed for ECDH scanning.
-> Full file format retains all fields for seekable indexed access.
+**HTTP API:**
+```
+GET /api/pubkeys?from={height}&to={height}              → JSON
+GET /api/pubkeys?from={height}&to={height}&format=binary → binary stream
+GET /api/health                                          → service status
+GET /api/stats                                           → cache statistics
+```
 
-**Library usage:**
-```js
-const { createScanner } = require('./pubkey-indexer');
-const scanner = createScanner({ source: 'fulcrum', cacheDir: './cache' });
-
-for await (const { height, pubkey, prevTxid, prevVout } of scanner.pubkeys(943000, 943100)) {
-  // ECDH check
-  const shared = secp256k1.getSharedSecret(scanPriv, pubkey);
-  const tweak  = sha256(shared);
-  const candidate = secp256k1.pointAddScalar(spendPub, tweak);
-  const addr   = p2pkh(candidate);
-  if (myUtxos.has(addr)) { /* stealth payment found */ }
+JSON response example:
+```json
+{
+  "from": 943000, "to": 943001,
+  "entries": [
+    {
+      "height": 943000,
+      "txid": "aabbcc...",
+      "vin": 0,
+      "pubkey": "02a1b2c3...",
+      "outpointTxid": "ddeeff...",
+      "outpointVout": 1
+    }
+  ]
 }
+```
+
+**CLI:**
+```bash
+# HTTP API server on port 3847
+pubkey-indexer serve
+
+# Stream JSON lines to stdout
+pubkey-indexer scan --from 943000 --to 943100
+
+# Stream compact 69-byte binary records
+pubkey-indexer scan --from 943000 --format binary
+
+# Use local BCHN node
+pubkey-indexer scan --from 943000 --source local-node --rpc-url http://localhost:8332
+
+# Custom cache and port
+pubkey-indexer serve --cache-dir /data/pubkeys --port 3847
+```
+
+**Library usage (Node.js / EC plugin):**
+```javascript
+const { createScanner } = require('./indexer/pubkey-indexer');
+
+const scanner = createScanner({
+  source: 'fulcrum',      // 'fulcrum' or 'local-node'
+  rpcUrl: 'http://localhost:8332',
+  cacheDir: './cache'
+});
+
+// Async generator — streaming, memory-efficient
+for await (const entry of scanner.pubkeys(943000, 943100)) {
+  // entry: { height, txid: Buffer(32), vin,
+  //          pubkey: Buffer(33), outpointTxid: Buffer(32), outpointVout }
+  const shared    = secp256k1.getSharedSecret(scanPriv, entry.pubkey);
+  const tweak     = sha256(shared);
+  const candidate = deriveAddress(spendPub, tweak);
+  if (myUtxos.has(candidate)) { /* stealth payment found */ }
+}
+
+// All at once
+const entries = await scanner.getPubkeys(943000, 943100);
 ```
 
 ---
 
 ### 3. Fusion (CoinJoin — 00 Joiner)
 
-**Implementation**: `fusion.html`
+Multi-wallet CoinJoin over BCH. No central coordinator — pure Nostr ephemeral events.
 
-Multi-wallet, Nostr-coordinated CoinJoin mixing. 6-phase protocol:
+**6-phase protocol:**
 
-```
-Phase 1: Announcement   → broadcast intent to join round via Nostr
-Phase 2: Registration   → register inputs + blinded outputs
-Phase 3: Rounds         → onion-wrapped input/output matching
-Phase 4: Reveal         → deblind outputs, verify no input/output link
-Phase 5: Commit         → all peers sign the combined transaction
-Phase 6: Broadcast      → submit to BCH network
-```
+| Phase | Name | Action |
+|-------|------|--------|
+| 1 | Announcement | Broadcast intent to join round via Nostr |
+| 2 | Registration | Register inputs + onion-blinded outputs |
+| 3 | Rounds | Multi-round onion-wrapped output matching |
+| 4 | Reveal | Deblind outputs, verify no input/output link |
+| 5 | Commit | All peers sign the combined transaction |
+| 6 | Broadcast | Submit to BCH network |
 
-Key properties:
-- No central coordinator — Nostr ephemeral events only
-- Onion-wrapped output registration (no coordinator knows who gets what)
-- Configurable rounds: 1–4 passes through the mixer
-- Input/output amounts must match (equal-value mixing)
+Configurable rounds (1–4). Onion-wrapped output registration — no coordinator sees who gets what. Equal-value mixing breaks on-chain linkage.
 
 ---
 
 ### 4. Onion Routing (00 Onion)
 
-**Implementation**: `onion.html`
-
-Multi-hop HTLC payment routing over BCH, Nostr-coordinated:
+Multi-hop HTLC payment routing over BCH, Nostr-coordinated.
 
 ```
-Sender → Relay1 (HTLC) → Relay2 (HTLC) → Relay3 (HTLC) → Receiver
+Sender → Relay 1 (HTLC) → Relay 2 (HTLC) → Relay 3 (HTLC) → Receiver
 ```
 
-- Each hop: Hash Time Locked Contract on-chain
-- Routing instructions onion-encrypted per hop (only next hop revealed)
-- Nostr relays coordinate hop discovery and routing
-- Relay pool: join with locked BCH, earn routing fees
-- `onionLayer()` / `onionPeel()`: layered AES-GCM encryption
+- Each hop: Hash Time Lock Contract locked on-chain
+- Routing instructions AES-GCM layered encrypted per hop
+- Only next-hop revealed per relay — no node sees full path
+- Relay pool: lock BCH to participate, earn routing fees
+- Nostr used for relay discovery and coordination
 
 ---
 
-## Deployment Targets
+## Downloads
 
-### Target 1: Start9 / Server (Service Mode)
+Pre-built self-contained binaries. No installation, no Node.js required.
 
-```
-start9-pubkey-indexer/
-├── Dockerfile              # node:18-alpine, ~50MB image
-├── start9/
-│   ├── manifest.yaml       # Start9 package manifest
-│   ├── config.yaml         # UI config schema
-│   ├── docker_entrypoint.sh
-│   └── check-health.sh
-└── pubkey-indexer.js       # Self-contained ~350 LOC
-```
+| Platform | File | Size |
+|----------|------|------|
+| Linux x64 | [`dist/pubkey-indexer-linux`](dist/pubkey-indexer-linux) | ~45 MB |
+| macOS Intel | [`dist/pubkey-indexer-mac`](dist/pubkey-indexer-mac) | ~50 MB |
+| macOS Apple Silicon | [`dist/pubkey-indexer-mac-arm64`](dist/pubkey-indexer-mac-arm64) | ~45 MB |
+| Windows x64 | [`dist/pubkey-indexer-win.exe`](dist/pubkey-indexer-win.exe) | ~37 MB |
 
-Behavior on Start9:
-- Runs as background service, auto-start on boot
-- HTTP API on port 3847 (LAN + Tor)
-- Tor .onion auto-generated → usable from anywhere
-- If BCHN installed on same server: auto-discovers RPC at `http://bchn:8332`
-- If no node: falls back to public Fulcrum servers
-- Dashboard: sync height, blocks cached, connected source, .onion address
-
-### Target 2: AppImage / Desktop (Local Mode)
-
-```
-pubkey-indexer          (single binary via pkg, ~40MB)
-
-Commands:
-  pubkey-indexer serve                          # HTTP API (same as server)
-  pubkey-indexer scan --from 943000             # JSON lines to stdout
-  pubkey-indexer scan --from 943000 --format binary   # 69-byte records
-  pubkey-indexer scan --from 943000 --source node --rpc http://localhost:8332
+**Linux / macOS:**
+```bash
+chmod +x pubkey-indexer-linux
+./pubkey-indexer-linux serve
+# → Listening on http://localhost:3847
 ```
 
-Build targets:
-- `dist/pubkey-indexer-linux`      (Linux x64)
-- `dist/pubkey-indexer-mac`        (macOS Intel)
-- `dist/pubkey-indexer-mac-arm64`  (macOS Apple Silicon)
-- `dist/pubkey-indexer-win.exe`    (Windows x64)
-
-### Target 3: Library (Direct Wallet Integration)
-
-```js
-// EC plugin or any Node.js wallet
-const { createScanner } = require('bch-pubkey-indexer');
-
-const scanner = createScanner({
-  source: 'fulcrum',       // 'fulcrum' (default) or 'local-node'
-  cacheDir: './cache'
-});
-
-for await (const entry of scanner.pubkeys(943000, 943100)) {
-  // entry: { height, vin, pubkey: Buffer(33), prevTxid: Buffer(32), prevVout }
-}
+**Windows:**
+```powershell
+.\pubkey-indexer-win.exe serve
 ```
 
-No HTTP overhead. No JSON parsing. Direct binary iteration over cached data.
+> macOS Apple Silicon binaries require ad-hoc code signing:
+> `codesign --sign - pubkey-indexer-mac-arm64`
 
 ---
 
-## Implementation Status
+## Start9 Deployment
 
-| Component | Status | File |
-|-----------|--------|------|
-| Stealth Addresses (00 Protocol) | ✅ Live | `wallet.html:4139-4515` |
-| Pubkey Indexer API | ✅ Live | `indexer/pubkey-indexer.js` |
-| Fusion (CoinJoin) | ✅ Live | `fusion.html` |
-| Onion Routing | ✅ Live | `onion.html` |
-| Auto Stealth Mode (unified pipeline) | 🔧 Next | `wallet.html` |
-| Start9 package | 🔧 This week | `indexer/start9/` |
-| Desktop binaries (Linux/Mac/Win) | 🔧 This week | `indexer/scripts/` |
-| Configurable Fusion rounds (1–4) | 🔧 Next | `fusion.html` |
-| BCHN node source mode | 🔧 Ready | `indexer/pubkey-indexer.js` |
+Self-host on [Start9](https://start9.com) (OS 0.4.0+) as a background service with automatic Tor `.onion` access.
 
----
-
-## What Needs to Be Built Next
-
-### High Priority
-
-1. **Auto Stealth Mode toggle** in `wallet.html`
-   - Single checkbox in Settings (default ON)
-   - On UTXO receive: auto-trigger `onionRoute()` → `fusionJoin()` → `sendStealth()`
-   - Round selector: 1 / 2 / 3 / 4
-
-2. **Configurable Fusion rounds** in `fusion.html`
-   - Currently fixed rounds — expose as config param
-   - UI: four-button selector
-
-3. **Start9 .s9pk packaging** (`indexer/start9/`)
-   - `make` → `start-sdk pack` → `bch-pubkey-indexer.s9pk`
-   - Submit to Start9 marketplace
-
-4. **Desktop binary releases** (`indexer/scripts/`)
-   - GitHub Actions CI: build all targets on tag push
-   - Attach to GitHub release as downloadable assets
-
-### Medium Priority
-
-5. **BCHN source mode testing** — wire up and test `getblock(hash, 2)` path
-6. **Binary cache format** — implement read-back path (currently write-only)
-7. **Indexer URL config in 00-Wallet** — let users point to their Start9 .onion
-
----
-
-## Repository Structure
-
+**Build the `.s9pk` package:**
+```bash
+cd indexer/start9
+make
+# → bch-pubkey-indexer.s9pk
+start-sdk verify bch-pubkey-indexer.s9pk
 ```
-00-Wallet/
-├── landing/                    # 00-Wallet PWA (22 modules)
-│   ├── wallet.html             # HD wallet + stealth implementation
-│   ├── fusion.html             # CoinJoin (6-phase, Nostr)
-│   ├── onion.html              # Multi-hop HTLC routing
-│   ├── stealth.html            # Protocol specification
-│   └── indexer.html            # Indexer API documentation
-│
-├── indexer/                    # Pubkey Indexer (standalone service)
-│   ├── pubkey-indexer.js       # Core: Fulcrum+BCHN sources, HTTP API, CLI, library
-│   ├── package.json
-│   ├── start9/                 # Start9 packaging
-│   │   ├── Dockerfile
-│   │   ├── manifest.yaml       # StartOS package manifest
-│   │   ├── config.yaml         # UI config schema
-│   │   ├── docker_entrypoint.sh
-│   │   ├── check-health.sh
-│   │   ├── instructions.md
-│   │   └── Makefile
-│   └── scripts/                # Desktop build scripts
-│       ├── build-linux.sh
-│       ├── build-mac.sh
-│       ├── build-windows.sh
-│       └── build-all.sh
-│
-└── bch-stealth-protocol/       # This document — protocol spec
-    └── README.md
+
+**Install:** Sideload `bch-pubkey-indexer.s9pk` via Start9 UI → Services → Sideload.
+
+**What you get:**
+- HTTP API on port 3847 (LAN + SSL)
+- Tor `.onion` address auto-generated — share with mobile wallet for remote access
+- Auto-discovers BCHN at `http://bchn:8332` if installed on same server
+- Falls back to public Fulcrum servers if no node
+
+**Config options (set via Start9 UI):**
+
+| Setting | Options | Default |
+|---------|---------|---------|
+| Source | Fulcrum / Local Node (BCHN) | Fulcrum |
+| Fulcrum URL | wss://... | auto-rotate public servers |
+| BCHN RPC URL | http://... | http://bchn:8332 |
+| Max block range | 10–500 | 100 blocks |
+
+---
+
+## Build from Source
+
+**Requirements:** Node.js 18+, npm
+
+```bash
+cd indexer
+npm install
+
+# Run directly
+node pubkey-indexer.js serve
+
+# Build all platform binaries
+npm run build:all
+
+# Individual targets
+npm run build:linux
+npm run build:mac
+npm run build:mac-arm
+npm run build:win
 ```
 
 ---
 
-## References
+## Configuration Reference
 
-- [00 Protocol Stealth Spec](https://0penw0rld.com/stealth.html)
-- [Pubkey Indexer API](https://0penw0rld.com/indexer.html)
-- [BCH Research Forum — ECDH Stealth Addresses](https://bitcoincashresearch.org/t/ecdh-stealth-addresses-on-bitcoin-cash-implementation-code/1773)
-- [BIP352 — Silent Payments](https://github.com/bitcoin/bips/blob/master/bip-0352.mediawiki)
-- [CashFusion Protocol](https://cashfusion.org/)
+CLI flags or environment variables:
+
+| Flag | Env | Default | Description |
+|------|-----|---------|-------------|
+| `--source` | `SOURCE` | `fulcrum` | `fulcrum` or `local-node` |
+| `--fulcrum-url` | `FULCRUM_URL` | auto-rotate | Override Fulcrum WSS server |
+| `--rpc-url` | `RPC_URL` | `http://localhost:8332` | BCHN RPC endpoint |
+| `--rpc-user` | `RPC_USER` | `rpc` | BCHN RPC username |
+| `--rpc-pass` | `RPC_PASS` | _(none)_ | BCHN RPC password |
+| `--cache-dir` | `CACHE_DIR` | `./cache/pubkeys` | Block cache directory |
+| `--port` | `PORT` | `3847` | HTTP API port |
+| `--max-range` | `MAX_RANGE` | `100` | Max blocks per request |
+
+---
+
+## Deployment Matrix
+
+| Target | Format | Transport | Source mode |
+|--------|--------|-----------|-------------|
+| Start9 server | Docker `.s9pk` | HTTP + Tor `.onion` | Fulcrum or Local BCHN |
+| Desktop / AppImage | Single binary | HTTP localhost | Fulcrum or local node |
+| CLI pipe | Same binary | stdout binary/JSON | Fulcrum or local node |
+| EC plugin / wallet | `require()` | in-process | Fulcrum or local node |
+
+---
+
+## Live
+
+- **00-Wallet:** [0penw0rld.com](https://0penw0rld.com)
+- **Stealth spec:** [0penw0rld.com/stealth.html](https://0penw0rld.com/stealth.html)
+- **Indexer API:** [0penw0rld.com/indexer.html](https://0penw0rld.com/indexer.html)
+- **BCH Research:** [ECDH Stealth Addresses on BCH](https://bitcoincashresearch.org/t/ecdh-stealth-addresses-on-bitcoin-cash-implementation-code/1773)
+
+---
+
+## License
+
+MIT
