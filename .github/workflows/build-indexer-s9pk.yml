@@ -24,7 +24,7 @@ jobs:
       - name: Build all platform binaries
         working-directory: indexer
         run: |
-          npm ci
+          npm install
           npm run build:all
 
       - name: Rename binaries to release names
