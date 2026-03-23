@@ -21,6 +21,7 @@ jobs:
       - name: Build s9pk
         working-directory: indexer/start9
         run: |
+          cp ../pubkey-indexer.js .
           start-cli init-key
           npm ci
           npm run build
