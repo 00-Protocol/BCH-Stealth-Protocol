@@ -19,7 +19,7 @@ export const manifest = setupManifest({
   volumes: ['main'],
   images: {
     main: {
-      source: { dockerBuild: { workdir: '..', dockerfile: 'start9/Dockerfile' } },
+      source: { dockerBuild: {} },
     },
   },
   alerts: {
