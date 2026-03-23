@@ -46,6 +46,9 @@ $(PACKAGE_ID)_%.s9pk: $(INGREDIENTS) ../../.git/HEAD ../../.git/index
 	@echo "   Packing '$@'..."
 	start-cli s9pk pack --arch=$* -o $@
 
+assets:
+	@mkdir -p $@
+
 ingredients: $(INGREDIENTS)
 	@echo "   Re-evaluating ingredients..."
 
