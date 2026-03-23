@@ -1,0 +1,41 @@
+name: Build BCH Pubkey Indexer s9pk
+
+on:
+  push:
+    tags:
+      - 'indexer-v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Prepare StartOS SDK
+        uses: Start9Labs/sdk@v1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build s9pk
+        working-directory: indexer/start9
+        run: |
+          start-cli init-key
+          npm ci
+          make
+        shell: bash
+
+      - name: Generate sha256 checksum
+        working-directory: indexer/start9
+        run: |
+          sha256sum bch-pubkey-indexer.s9pk > bch-pubkey-indexer.s9pk.sha256
+          echo "SHA256: $(cat bch-pubkey-indexer.s9pk.sha256)"
+
+      - name: Upload s9pk to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            indexer/start9/bch-pubkey-indexer.s9pk
+            indexer/start9/bch-pubkey-indexer.s9pk.sha256
