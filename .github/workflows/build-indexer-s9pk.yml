@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Prepare StartOS SDK
-        uses: Start9Labs/sdk@v2
+        uses: Start9Labs/sdk@v2.1
 
       - name: Checkout
         uses: actions/checkout@v4
