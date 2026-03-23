@@ -19,7 +19,7 @@ export const manifest = setupManifest({
   volumes: ['main'],
   images: {
     main: {
-      source: { dockerTag: 'start9labs/bch-pubkey-indexer:latest' },
+      source: { dockerBuild: { workdir: '..', dockerfile: 'start9/Dockerfile' } },
     },
   },
   alerts: {

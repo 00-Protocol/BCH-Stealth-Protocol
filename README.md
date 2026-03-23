@@ -314,10 +314,10 @@ Pre-built self-contained binaries. No installation, no Node.js required.
 
 | Platform | File | Size |
 |----------|------|------|
-| Linux x64 | [`dist/pubkey-indexer-linux`](dist/pubkey-indexer-linux) | ~45 MB |
-| macOS Intel | [`dist/pubkey-indexer-mac`](dist/pubkey-indexer-mac) | ~50 MB |
-| macOS Apple Silicon | [`dist/pubkey-indexer-mac-arm64`](dist/pubkey-indexer-mac-arm64) | ~45 MB |
-| Windows x64 | [`dist/pubkey-indexer-win.exe`](dist/pubkey-indexer-win.exe) | ~37 MB |
+| Linux x64 | [`BCH-Pubkey-Indexer-linux`](dist/pubkey-indexer-linux) | ~45 MB |
+| macOS Intel | [`BCH-Pubkey-Indexer-mac`](dist/pubkey-indexer-mac) | ~50 MB |
+| macOS Apple Silicon | [`BCH-Pubkey-Indexer-mac-arm64`](dist/pubkey-indexer-mac-arm64) | ~45 MB |
+| Windows x64 | [`BCH-Pubkey-Indexer-win.exe`](dist/pubkey-indexer-win.exe) | ~37 MB |
 
 **Linux / macOS:**
 ```bash
@@ -343,9 +343,10 @@ Self-host on [Start9](https://start9.com) (OS 0.4.0+) as a background service wi
 **Build the `.s9pk` package:**
 ```bash
 cd indexer/start9
+npm ci
 make
 # → bch-pubkey-indexer.s9pk
-start-sdk verify bch-pubkey-indexer.s9pk
+start-cli s9pk inspect bch-pubkey-indexer.s9pk
 ```
 
 **Install:** Sideload `bch-pubkey-indexer.s9pk` via Start9 UI → Services → Sideload.
@@ -353,17 +354,7 @@ start-sdk verify bch-pubkey-indexer.s9pk
 **What you get:**
 - HTTP API on port 3847 (LAN + SSL)
 - Tor `.onion` address auto-generated — share with mobile wallet for remote access
-- Auto-discovers BCHN at `http://bchn:8332` if installed on same server
-- Falls back to public Fulcrum servers if no node
-
-**Config options (set via Start9 UI):**
-
-| Setting | Options | Default |
-|---------|---------|---------|
-| Source | Fulcrum / Local Node (BCHN) | Fulcrum |
-| Fulcrum URL | wss://... | auto-rotate public servers |
-| BCHN RPC URL | http://... | http://bchn:8332 |
-| Max block range | 10–500 | 100 blocks |
+- Connects to public Fulcrum servers by default; point to a local BCHN node with `--rpc-url`
 
 ---
 
