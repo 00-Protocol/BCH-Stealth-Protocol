@@ -23,6 +23,7 @@ jobs:
         run: |
           start-cli init-key
           npm ci
+          npm run build
           make
         shell: bash
 
