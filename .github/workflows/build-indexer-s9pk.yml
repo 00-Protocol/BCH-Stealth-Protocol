@@ -3,7 +3,7 @@ name: Build BCH Pubkey Indexer s9pk
 on:
   push:
     tags:
-      - 'indexer-v*'
+      - 'BCH-Pubkey-Indexer-v*'
 
 jobs:
   build:
