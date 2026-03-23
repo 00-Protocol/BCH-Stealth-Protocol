@@ -34,15 +34,14 @@ export const main = sdk.setupMain(async ({ effects }) => {
       display: 'HTTP API',
       fn: async () => {
         try {
-          const res = await effects.fetch(
+          const res = await fetch(
             `http://localhost:${apiPort}/api/health`,
           )
           if (res.status === 200) {
             const body = await res.json() as { status?: string }
             if (body.status === 'ok') {
-              const stats = await effects
-                .fetch(`http://localhost:${apiPort}/api/stats`)
-                .then((r) => r.json()) as { cached_blocks?: number }
+              const stats = await fetch(`http://localhost:${apiPort}/api/stats`)
+                .then((r: Response) => r.json()) as { cached_blocks?: number }
               return {
                 message: `API ready — ${stats.cached_blocks ?? 0} blocks cached`,
                 result: 'success',

@@ -1,15 +1,5 @@
 import { sdk } from '../sdk'
 
-export const seedFiles = sdk.setupOnInit(async (effects) => {
-  // Create cache directories on first init
-  await effects.createDir({
-    volumeId: 'main',
-    path: 'pubkeys/json',
-    skipIfExists: true,
-  })
-  await effects.createDir({
-    volumeId: 'main',
-    path: 'pubkeys/bin',
-    skipIfExists: true,
-  })
+export const seedFiles = sdk.setupOnInit(async () => {
+  // Cache dirs are created in the Docker image (Dockerfile: mkdir -p /data/pubkeys/json /data/pubkeys/bin)
 })
