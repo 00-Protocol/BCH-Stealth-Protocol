@@ -1,0 +1,30 @@
+name: Upload BCH Stealth Plugin
+
+on:
+  push:
+    tags:
+      - 'stealth-v*'
+
+jobs:
+  upload-plugin:
+    name: Upload stealth plugin zip to release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate sha256 checksum
+        run: |
+          sha256sum stealth.zip > stealth.zip.sha256
+          echo "SHA256: $(cat stealth.zip.sha256)"
+
+      - name: Upload stealth.zip to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            stealth.zip
+            stealth.zip.sha256
