@@ -16,23 +16,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build stealth.zip
+      - name: Build stealth-ec-plugin.zip
         run: |
           cd stealth
-          zip -r ../stealth.zip . -x "__pycache__/*" "*.pyc" ".DS_Store"
+          zip -r ../stealth-ec-plugin.zip . -x "__pycache__/*" "*.pyc" ".DS_Store"
           cd ..
-          echo "Built stealth.zip:"
-          unzip -l stealth.zip
+          echo "Built stealth-ec-plugin.zip:"
+          unzip -l stealth-ec-plugin.zip
 
       - name: Generate sha256 checksum
         run: |
-          sha256sum stealth.zip > stealth.zip.sha256
-          echo "SHA256: $(cat stealth.zip.sha256)"
+          sha256sum stealth-ec-plugin.zip > stealth-ec-plugin.zip.sha256
+          echo "SHA256: $(cat stealth-ec-plugin.zip.sha256)"
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            stealth.zip
-            stealth.zip.sha256
+            stealth-ec-plugin.zip
+            stealth-ec-plugin.zip.sha256
