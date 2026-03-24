@@ -1,13 +1,13 @@
-name: Upload BCH Stealth Plugin
+name: Build and Upload BCH Stealth Plugin
 
 on:
   push:
     tags:
-      - 'stealth-v*'
+      - 'plugin-v*'
 
 jobs:
-  upload-plugin:
-    name: Upload stealth plugin zip to release
+  build-and-upload:
+    name: Build stealth.zip and upload to release
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -16,12 +16,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Build stealth.zip
+        run: |
+          cd stealth
+          zip -r ../stealth.zip . -x "__pycache__/*" "*.pyc" ".DS_Store"
+          cd ..
+          echo "Built stealth.zip:"
+          unzip -l stealth.zip
+
       - name: Generate sha256 checksum
         run: |
           sha256sum stealth.zip > stealth.zip.sha256
           echo "SHA256: $(cat stealth.zip.sha256)"
 
-      - name: Upload stealth.zip to release
+      - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
