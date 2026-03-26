@@ -105,6 +105,34 @@ Raw hex key:  scan_key  = SHA256("bch-stealth-scan:"  || raw_key)
               spend_key = SHA256("bch-stealth-spend:" || raw_key)
 ```
 
+**BCH ecosystem derivation tree**
+
+Three independent purpose branches from the same seed, no collisions:
+
+```
+
+master seed
+├── m/44'/145'/0'     ← regular wallet (BIP44)
+│    ├── /0  receive  (non-hardened)
+│    └── /1  change   (non-hardened)
+│
+├── m/47'/145'/0'     ← RPA paycodes (BIP47-SP style)
+│    ├── /0' spend branch (hardened gate)  <- isolated from scan
+│    │    └── /0      key (non-hardened) (m/47'/145'/0'/0'/0)
+│    └── /1' scan branch  (hardened gate)  <- isolated from spend
+│         └── /0      key (non-hardened) (m/47'/145'/0'/1'/0)
+│
+└── m/352'/145'/0'    ← BCH Stealth (BIP352 structure)
+     ├── /0' spend branch (hardened gate)  <- isolated from scan
+     │    └── /0      key (non-hardened) (m/352'/145'/0'/0'/0)
+     └── /1' scan branch  (hardened gate)  <- isolated from spend
+          └── /0      key (non-hardened) (m/352'/145'/0'/1'/0)
+
+
+```
+
+Each protocol owns its own tree. Recoverable by any wallet that knows the purpose numbers.
+
 ---
 
 ### 2. P2PKH Pubkey Indexer
@@ -294,18 +322,21 @@ Configurable rounds (1–4). Onion-wrapped output registration — no coordinato
 
 ### 4. Onion Routing (00 Onion)
 
-Multi-hop HTLC payment routing over BCH, Nostr-coordinated.
+Decentralized Fusion/Silent Joiner relay for encrypted routing and coordination through Nostr.
 
 ```
-Sender → Relay 1 (HTLC) → Relay 2 (HTLC) → Relay 3 (HTLC) → Receiver
+
+                        Nostr Relays
+                       (public infra)
+                      /       |       \
+        User A  ----+        |        +----  User B
+        User C  ----+        |        +----  User D
+                      \       |       /
+                       Onion Relay
+                      /             \
+            Fulcrum WSS          BCHN RPC
+           (blockchain)         (blockchain)
 ```
-
-- Each hop: Hash Time Lock Contract locked on-chain
-- Routing instructions AES-GCM layered encrypted per hop
-- Only next-hop revealed per relay — no node sees full path
-- Relay pool: lock BCH to participate, earn routing fees
-- Nostr used for relay discovery and coordination
-
 ---
 
 ## Downloads
