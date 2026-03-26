@@ -294,17 +294,19 @@ Configurable rounds (1–4). Onion-wrapped output registration — no coordinato
 
 ### 4. Onion Routing (00 Onion)
 
-Multi-hop HTLC payment routing over BCH, Nostr-coordinated.
+Decentralized relay for encrypted fusion payment routing over BCH, Nostr-coordinated.
 
-```
-Sender → Relay 1 (HTLC) → Relay 2 (HTLC) → Relay 3 (HTLC) → Receiver
-```
 
-- Each hop: Hash Time Lock Contract locked on-chain
-- Routing instructions AES-GCM layered encrypted per hop
-- Only next-hop revealed per relay — no node sees full path
-- Relay pool: lock BCH to participate, earn routing fees
-- Nostr used for relay discovery and coordination
+                        Nostr Relays
+                       (public infra)
+                      /       |       \
+        User A  ----+        |        +----  User B
+        User C  ----+        |        +----  User D
+                      \       |       /
+                       Onion Relay
+                      /             \
+            Fulcrum WSS          BCHN RPC
+           (blockchain)         (blockchain)
 
 ---
 
