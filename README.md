@@ -891,7 +891,6 @@ These shared primitives are identical in [`@00-protocol/sdk`](https://github.com
 
 - [ ] Multi-round pipelining (outputs of round N → inputs of round N+1, automatic)
 - [ ] Auto-mix on receive (trigger Fusion automatically on incoming UTXO)
-- [ ] BIP352 aggregated ECDH (5–10× faster scanning)
 - [ ] Tor transport for indexer queries
 
 ---
